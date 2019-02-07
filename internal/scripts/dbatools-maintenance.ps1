@@ -1,5 +1,5 @@
 foreach ($item in (Get-ChildItem "$script:PSModuleRoot\internal\maintenance" -Filter *.ps1)) {
-    if ($script:doDotSource) { . $item.FullName }
+    if ($script:enableDebugMode) { . $item.FullName }
     else { $ExecutionContext.InvokeCommand.InvokeScript($false, ([scriptblock]::Create([io.file]::ReadAllText($item.FullName))), $null, $null) }
 }
 

@@ -34,7 +34,7 @@ function Import-ModuleFile {
         $Path
     )
 
-    if ($script:doDotSource) {
+    if ($script:enableDebugMode) {
         . (Resolve-Path -Path $Path)
     } else {
         $ExecutionContext.InvokeCommand.InvokeScript($false, ([scriptblock]::Create([io.file]::ReadAllText((Resolve-Path -Path $Path)))), $null, $null)
@@ -104,10 +104,10 @@ $dbatoolsSystemSystemNode = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Win
 
 #region Dot Sourcing
 # Detect whether at some level dotsourcing was enforced
-$script:doDotSource = $false
-if ($dbatools_dotsourcemodule) { $script:doDotSource = $true }
-if ($dbatoolsSystemSystemNode.DoDotSource) { $script:doDotSource = $true }
-if ($dbatoolsSystemUserNode.DoDotSource) { $script:doDotSource = $true }
+$script:enableDebugMode = $false
+if ($dbatools_dotsourcemodule) { $script:enableDebugMode = $true }
+if ($dbatoolsSystemSystemNode.enableDebugMode) { $script:enableDebugMode = $true }
+if ($dbatoolsSystemUserNode.enableDebugMode) { $script:enableDebugMode = $true }
 #endregion Dot Sourcing
 
 #region Copy DLL Mode
@@ -136,8 +136,8 @@ $script:multiFileImport = $false
 if ($dbatools_multiFileImport) { $script:multiFileImport = $true }
 if ($dbatoolsSystemSystemNode.MultiFileImport) { $script:multiFileImport = $true }
 if ($dbatoolsSystemUserNode.MultiFileImport) { $script:multiFileImport = $true }
-if (Test-Path -Path "$script:PSModuleRoot\.git") { $script:multiFileImport = $true; $script:doDotSource = $true }
-if (Test-Path -Path "$script:PSModuleRoot/.git") { $script:multiFileImport = $true; $script:doDotSource = $true }
+if (Test-Path -Path "$script:PSModuleRoot\.git") { $script:multiFileImport = $true; $script:enableDebugMode = $true }
+if (Test-Path -Path "$script:PSModuleRoot/.git") { $script:multiFileImport = $true; $script:enableDebugMode = $true }
 #endregion Multi File Import
 
 Write-ImportTime -Text "Validated defines"

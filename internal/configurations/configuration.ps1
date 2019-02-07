@@ -133,14 +133,14 @@ $configpath = Resolve-Path "$script:PSModuleRoot\internal\configurations"
 # Import configuration validation
 foreach ($file in (Get-ChildItem -Path (Resolve-Path "$configpath\validation")))
 {
-    if ($script:doDotSource) { . $file.FullName }
+    if ($script:enableDebugMode) { . $file.FullName }
     else { . ([scriptblock]::Create([io.file]::ReadAllText($file.FullName))) }
 }
 
 # Import other configuration files
 foreach ($file in (Get-ChildItem -Path (Resolve-Path "$configpath\settings")))
 {
-    if ($script:doDotSource) { . $file.FullName }
+    if ($script:enableDebugMode) { . $file.FullName }
     else { . ([scriptblock]::Create([io.file]::ReadAllText($file.FullName))) }
 }
 
