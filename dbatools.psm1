@@ -136,8 +136,8 @@ $script:multiFileImport = $false
 if ($dbatools_multiFileImport) { $script:multiFileImport = $true }
 if ($dbatoolsSystemSystemNode.MultiFileImport) { $script:multiFileImport = $true }
 if ($dbatoolsSystemUserNode.MultiFileImport) { $script:multiFileImport = $true }
-if (Test-Path -Path "$script:PSModuleRoot\.git") { $script:multiFileImport = $true }
-if (Test-Path -Path "$script:PSModuleRoot/.git") { $script:multiFileImport = $true }
+if (Test-Path -Path "$script:PSModuleRoot\.git") { $script:multiFileImport = $true; $script:doDotSource = $true }
+if (Test-Path -Path "$script:PSModuleRoot/.git") { $script:multiFileImport = $true; $script:doDotSource = $true }
 #endregion Multi File Import
 
 Write-ImportTime -Text "Validated defines"
