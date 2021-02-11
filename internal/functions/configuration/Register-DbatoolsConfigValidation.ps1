@@ -21,9 +21,9 @@ function Register-DbatoolsConfigValidation {
             The scriptblock to register
 
         .EXAMPLE
-            PS C:\> Register-DbatoolsConfigValidation -Name IntPositive -ScriptBlock $scriptblock
+            PS C:\> Register-DbatoolsConfigValidation -Name IntPositive -ScriptBlock $scriptBlock
 
-            Registers the scriptblock stored in $scriptblock as validation with the name IntPositive
+            Registers the scriptblock stored in $scriptBlock as validation with the name IntPositive
        #>
     [CmdletBinding()]
     param (
@@ -36,5 +36,5 @@ function Register-DbatoolsConfigValidation {
         $ScriptBlock
     )
 
-    [Sqlcollaborative.Dbatools.Configuration.ConfigurationHost]::Validation[$Name.ToLower()] = $ScriptBlock
+    [Sqlcollaborative.Dbatools.Configuration.ConfigurationHost]::Validation[$Name.ToLowerInvariant()] = $ScriptBlock
 }

@@ -1,48 +1,83 @@
 ---
-name: "Bug report \U0001F41B"
+name: "\U0001F41B Bug report"
 about: Found errors or unexpected behavior using dbatools module
+title: "[Bug]"
+labels: bugs_life
+assignees: ''
 
 ---
 
-### Before submitting a bug report:
+<!--
+🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+The core team may close bug reports that do not follow our provided template.
 
-- [ ] Ensure you are able to reproduce it on the latest released version (_we release often_)
-- [ ] Verified this bug is not already reported in an issue
-- [ ] Verified errors are not related to permissions
-- [ ] Can reproduce in a clean PowerShell session (_clean = `powershell -NoProfile`_)
-- [ ] If issue is with `Copy-DbaDatabase`, using `Backup-DbaDatabase | Restore-DbaDatabase` still does not work
+The information we ask for helps to better troubleshoot the report. We release frequently and often, this information helps to resolve the issue more efficiently.
+-->
 
-Note that we do not have the resources to make `Copy-DbaDatabase` work in every environment. Instead, we try to ensure Backup & Restore work in your enviornment.
+### Report
 
-## Steps to Reproduce
+<!--
+Things to consider/verify:
+- Errors received are not related to permissions?
+- Have you tried the command using `powershell.exe`?
+- If `Copy-DbaDatabase`, can you replicate the problem with `Backup-DbaDatabase` and `Restore-DbaDatabase`?
+- `Copy-DbaDatabase` will not work in every environment and every situation.
+-->
 
-```sql
-/*
-    Any T-SQL commands involved or used to produce test objects/data.
-*/
+#### Host used
+
+- [ ] powershell.exe
+- [ ] ISE
+- [ ] VS Code
+- [ ] Other (please specify)
+
+#### Errors Received
+<!--
+🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+Run the command and paste the output of `$error[0] | select *` below
+-->
+
 ```
+replace THIS text WITH the OUTPUT of -- $ERROR[0] | SELECT *
+```
+
+#### Steps to Reproduce
+
+<!--
+Provide a list of steps to reproduce and any code required. Sanitize code if needed.
+-->
+
+#### Expected Behavior
+
+<!--
+What did you expect to happen?
+-->
+
+#### Actual Behavior
+
+<!--
+What happened?
+-->
+
+### Environmental information
+
+🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+Please provide the output of the below script
 
 ```powershell
-<#
-    Provide exact (or sanitized) code to reproduce the error
-#>
+[pscustomobject]@{
+'PowerShell Version' = $PSVersionTable.PSVersion.ToString()
+'dbatools latest installed' = (Get-InstalledModule -Name dbatools).Version
+'Culture of OS' = (Get-Culture)
+} | fl -force
 ```
 
-## Expected Behavior
+#### SQL Server:
 
-<!--
-Sample output or detail explanation if possible
--->
+```sql
+/* REPLACE WITH output of @@VERSION */
+```
 
-## Actual Behavior
-
-<!--
-Output or detailed explanation if possible
--->
-
-## Environmental data
-
-<!-- Provide output of the following two commands -->
-
- - PowerShell: <!-- $PSVersionTable output -->
- - - SQL Server: <!-- SELECT @@VERSION output -->
+```sql
+/* REPLACE WITH output of @@LANGUAGE */
+```

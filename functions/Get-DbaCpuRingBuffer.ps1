@@ -17,7 +17,11 @@ function Get-DbaCpuRingBuffer {
         Allows you to specify a comma separated list of servers to query.
 
     .PARAMETER SqlCredential
-        Allows you to login to servers using SQL Logins as opposed to Windows Auth/Integrated/Trusted. To use:
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance. To use:
         $cred = Get-Credential, this pass this $cred to the param.
 
         Windows Authentication will be used if DestinationSqlCredential is not specified. To connect as a different Windows user, run PowerShell as that user.
@@ -70,11 +74,9 @@ function Get-DbaCpuRingBuffer {
     [CmdletBinding()]
     Param (
         [parameter(Mandatory, ValueFromPipeline)]
-        [Alias("ServerInstance", "SqlServer", "SqlServers")]
         [DbaInstance[]]$SqlInstance,
         [PSCredential]$SqlCredential,
         [int]$CollectionMinutes = 60,
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
@@ -86,7 +88,7 @@ function Get-DbaCpuRingBuffer {
             try {
                 $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential -MinimumVersion 9
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
 
             if ($server.VersionMajor -gt 9) {
@@ -127,7 +129,7 @@ function Get-DbaCpuRingBuffer {
             Write-Message -Level Verbose -Message "Executing Sql Staement: $sql"
             foreach ($row in $server.Query($sql)) {
                 [PSCustomObject]@{
-                    ComputerName            = $server.NetName
+                    ComputerName            = $server.ComputerName
                     InstanceName            = $server.ServiceName
                     SqlInstance             = $server.DomainInstanceName
                     RecordId                = $row.record_id

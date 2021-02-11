@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Invoke-DbMirrorValidation {
     <#
         .SYNOPSIS
@@ -44,7 +43,7 @@ function Invoke-DbMirrorValidation {
         .NOTES
             Tags: Mirror, HA
             Author: Chrissy LeMaire (@cl), netnerds.net
-            dbatools PowerShell module (https://dbatools.io, clemaire@gmail.com)
+            dbatools PowerShell module (https://dbatools.io)
            Copyright: (c) 2018 by dbatools, licensed under MIT
             License: MIT https://opensource.org/licenses/MIT
         .EXAMPLE
@@ -61,7 +60,7 @@ function Invoke-DbMirrorValidation {
 
             Do things
 
-       #>
+    #>
     [CmdletBinding()]
     param (
         [DbaInstanceParameter]$Primary,
@@ -89,9 +88,9 @@ function Invoke-DbMirrorValidation {
 
         foreach ($db in $InputObject) {
             $server = $db.Parent
-            $dbname = $db.Name
+            $dbName = $db.Name
             $canmirror = $true
-            $dest = Connect-DbaInstance -SqlInstance $Mirror -Credential $MirrorSqlCredential
+            $dest = Connect-DbaInstance -SqlInstance $Mirror -SqlCredential $MirrorSqlCredential
 
             $endpoints = @()
             $endpoints += Get-DbaEndpoint -SqlInstance $server | Where-Object EndpointType -eq DatabaseMirroring
@@ -111,7 +110,7 @@ function Invoke-DbMirrorValidation {
                     if ($witdb) {
                         $witexists = $true
                     } else {
-                        Write-Message -Level Verbose -Message "Database ($dbname) exists on witness server"
+                        Write-Message -Level Verbose -Message "Database ($dbName) exists on witness server"
                         $canmirror = $false
                         $witexists = $false
                     }
@@ -122,17 +121,17 @@ function Invoke-DbMirrorValidation {
             }
 
             if ($db.MirroringStatus -ne [Microsoft.SqlServer.Management.Smo.MirroringStatus]::None) {
-                Write-Message -Level Verbose -Message "Cannot setup mirroring on database ($dbname) due to its current mirroring state: $($db.MirroringStatus)"
+                Write-Message -Level Verbose -Message "Cannot setup mirroring on database ($dbName) due to its current mirroring state: $($db.MirroringStatus)"
                 $canmirror = $false
             }
 
             if ($db.Status -ne [Microsoft.SqlServer.Management.Smo.DatabaseStatus]::Normal) {
-                Write-Message -Level Verbose -Message "Cannot setup mirroring on database ($dbname) due to its current Status: $($db.Status)"
+                Write-Message -Level Verbose -Message "Cannot setup mirroring on database ($dbName) due to its current Status: $($db.Status)"
                 $canmirror = $false
             }
 
             if ($db.RecoveryModel -ne 'Full') {
-                Write-Message -Level Verbose -Message "Cannot setup mirroring on database ($dbname) due to its current recovery model: $($db.RecoveryModel)"
+                Write-Message -Level Verbose -Message "Cannot setup mirroring on database ($dbName) due to its current recovery model: $($db.RecoveryModel)"
                 $canmirror = $false
             }
 
@@ -149,7 +148,7 @@ function Invoke-DbMirrorValidation {
             if ($destdb) {
                 $destdbexists = $true
             } else {
-                Write-Message -Level Verbose -Message "Database ($dbname) does not exist on mirror server"
+                Write-Message -Level Verbose -Message "Database ($dbName) does not exist on mirror server"
                 $canmirror = $false
                 $destdbexists = $false
             }

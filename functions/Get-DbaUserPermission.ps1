@@ -14,7 +14,11 @@ function Get-DbaUserPermission {
         The target SQL Server instance or instances.
 
     .PARAMETER SqlCredential
-        Login to the target instance using alternative credentials. Windows and SQL Authentication supported. Accepts credential objects (Get-Credential)
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER Database
         The database(s) to process - this list is auto-populated from the server. If unspecified, all databases will be processed.
@@ -66,18 +70,14 @@ function Get-DbaUserPermission {
     #>
     [CmdletBinding()]
     param (
-        [parameter(Position = 0, Mandatory, ValueFromPipeline)]
-        [Alias("ServerInstance", "SqlServer", "SqlServers")]
+        [parameter(Mandatory, ValueFromPipeline)]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$SqlCredential,
-        [Alias("Databases")]
         [object[]]$Database,
         [object[]]$ExcludeDatabase,
-        [parameter(Position = 1)]
         [switch]$ExcludeSystemDatabase,
         [switch]$IncludePublicGuest,
         [switch]$IncludeSystemObjects,
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
@@ -142,7 +142,7 @@ function Get-DbaUserPermission {
 
         $dbSQL = "SELECT  'DB ROLE MEMBERS' AS type ,
                                 Member ,
-                                Role ,
+                                ISNULL(Role, 'None') AS [Role/Securable/Class],
                                 ' ' AS [Schema/Owner] ,
                                 ' ' AS [Securable] ,
                                 ' ' AS [Grantee Type] ,
@@ -156,7 +156,7 @@ function Get-DbaUserPermission {
                         UNION
                         SELECT DISTINCT
                                 'DB SECURABLES' AS Type ,
-                                drm.Member ,
+                                ISNULL(drm.member, 'None') AS [Role/Securable/Class] ,
                                 dp.[Securable Type or Class] COLLATE SQL_Latin1_General_CP1_CI_AS ,
                                 dp.[Schema/Owner] ,
                                 dp.Securable ,
@@ -168,13 +168,14 @@ function Get-DbaUserPermission {
                                 dp.[Grantor Type] COLLATE SQL_Latin1_General_CP1_CI_AS ,
                                 dp.[Source View]
                         FROM    tempdb.[STIG].[database_role_members] drm
-                                LEFT JOIN tempdb.[STIG].[database_permissions] dp ON ( drm.Member = dp.Grantee
+                                FULL JOIN tempdb.[STIG].[database_permissions] dp ON ( drm.Member = dp.Grantee
                                                                                       OR drm.Role = dp.Grantee
                                                                                      )
                         WHERE	dp.Grantor IS NOT NULL
+                                AND dp.Grantee NOT IN ('public', 'guest')
                                 AND [Schema/Owner] <> 'sys'"
 
-        if ($IncludePublicGuest) { $dbSQL = $dbSQL.Replace("LEFT JOIN", "FULL JOIN") }
+        if ($IncludePublicGuest) { $dbSQL = $dbSQL.Replace("AND dp.Grantee NOT IN ('public', 'guest')", "") }
         if ($IncludeSystemObjects) { $dbSQL = $dbSQL.Replace("AND [Schema/Owner] <> 'sys'", "") }
 
     }
@@ -183,9 +184,9 @@ function Get-DbaUserPermission {
         foreach ($instance in $SqlInstance) {
 
             try {
-                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential -MinimumVersion 10
+                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential -MinimumVersion 10 -AzureUnsupported
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
 
             $dbs = $server.Databases
@@ -215,7 +216,8 @@ function Get-DbaUserPermission {
                     Stop-Function -Message "The database $db is not accessible" -Continue
                 }
 
-                $sql = [System.IO.File]::ReadAllText("$script:PSModuleRoot\bin\stig.sql")
+                $sqlFile = Join-Path -Path $script:PSModuleRoot -ChildPath "bin\stig.sql"
+                $sql = [System.IO.File]::ReadAllText("$sqlFile")
                 $sql = $sql.Replace("<TARGETDB>", $db.Name)
 
                 #Create objects in active database
@@ -300,8 +302,5 @@ function Get-DbaUserPermission {
                 #Sashay Away
             }
         }
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Get-DbaUserLevelPermission
     }
 }

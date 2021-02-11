@@ -5,7 +5,7 @@ Write-Host -Object "Running $PSCommandPath" -ForegroundColor Cyan
 Describe "$CommandName Unit Tests" -Tag 'UnitTests' {
     Context "Validate parameters" {
         [object[]]$params = (Get-Command $CommandName).Parameters.Keys | Where-Object {$_ -notin ('whatif', 'confirm')}
-        [object[]]$knownParameters = 'SqlInstance','SqlCredential','Database','ExcludeDatabase','EnableException'
+        [object[]]$knownParameters = 'SqlInstance', 'SqlCredential', 'Database', 'ExcludeDatabase', 'EnableException'
         $knownParameters += [System.Management.Automation.PSCmdlet]::CommonParameters
         It "Should only contain our specific parameters" {
             (@(Compare-Object -ReferenceObject ($knownParameters | Where-Object {$_}) -DifferenceObject $params).Count ) | Should Be 0
@@ -36,7 +36,7 @@ DROP PARTITION FUNCTION [$PFName];
         Invoke-DbaQuery -SqlInstance $script:instance2 -Query $DropTestPartitionScheme -Database master
     }
 
-    Context "Partition Functions are correctly located" {
+    Context "Partition Schemes are correctly located" {
         $results1 = Get-DbaDbPartitionScheme -SqlInstance $script:instance2 -Database master | Select-Object *
         $results2 = Get-DbaDbPartitionScheme -SqlInstance $script:instance2
 

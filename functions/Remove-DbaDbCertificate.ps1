@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Remove-DbaDbCertificate {
     <#
     .SYNOPSIS
@@ -11,7 +10,11 @@ function Remove-DbaDbCertificate {
         The SQL Server to create the certificates on.
 
     .PARAMETER SqlCredential
-        Allows you to login to SQL Server using alternative credentials.
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER Database
         The database where the certificate will be removed.
@@ -41,6 +44,9 @@ function Remove-DbaDbCertificate {
         Copyright: (c) 2018 by dbatools, licensed under MIT
         License: MIT https://opensource.org/licenses/MIT
 
+    .LINK
+        https://dbatools.io/Remove-DbaDbCertificate
+
     .EXAMPLE
         PS C:\> Remove-DbaDbCertificate -SqlInstance Server1
 
@@ -54,7 +60,6 @@ function Remove-DbaDbCertificate {
     #>
     [CmdletBinding(DefaultParameterSetName = "Default", SupportsShouldProcess, ConfirmImpact = "High")]
     param (
-        [Alias("ServerInstance", "SqlServer")]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$SqlCredential,
         [string[]]$Database,
@@ -63,9 +68,6 @@ function Remove-DbaDbCertificate {
         [Microsoft.SqlServer.Management.Smo.Certificate[]]$InputObject,
         [switch]$EnableException
     )
-    begin {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -Alias Remove-DbaDatabaseCertificate
-    }
     process {
         if ($SqlInstance) {
             $InputObject += Get-DbaDbCertificate -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Certificate $Certificate -Database $Database

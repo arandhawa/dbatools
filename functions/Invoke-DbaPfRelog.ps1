@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Invoke-DbaPfRelog {
     <#
     .SYNOPSIS
@@ -169,8 +168,8 @@ function Invoke-DbaPfRelog {
         [switch]$EnableException
     )
     begin {
-        
-        
+
+
         if (Test-Bound -ParameterName BeginTime) {
             $script:beginstring = ($BeginTime -f 'M/d/yyyy hh:mm:ss' | Out-String).Trim()
         }
@@ -250,7 +249,7 @@ function Invoke-DbaPfRelog {
             return
         }
 
-        $scriptblock = {
+        $scriptBlock = {
             if ($args) {
                 $file = $args
             } else {
@@ -386,7 +385,7 @@ function Invoke-DbaPfRelog {
                     cmd /c "relog $arguments"
                 } else {
                     Write-Message -Level Verbose -Message "relog $arguments"
-                    $scriptblock = {
+                    $scriptBlock = {
                         $output = (cmd /c "relog $arguments" | Out-String).Trim()
 
                         if ($output -notmatch "Success") {
@@ -406,7 +405,7 @@ function Invoke-DbaPfRelog {
                             }
                         }
                     }
-                    Invoke-Command -ScriptBlock $scriptblock
+                    Invoke-Command -ScriptBlock $scriptBlock
                 }
             } catch {
                 Stop-Function -Message "Failure" -ErrorRecord $_ -Target $path
@@ -414,12 +413,12 @@ function Invoke-DbaPfRelog {
         }
 
         if ($Multithread) {
-            $allpaths | Invoke-Parallel -ImportVariables -ImportModules -ScriptBlock $scriptblock -ErrorAction SilentlyContinue -ErrorVariable parallelerror
+            $allpaths | Invoke-Parallel -ImportVariables -ImportModules -ScriptBlock $scriptBlock -ErrorAction SilentlyContinue -ErrorVariable parallelerror
             if ($parallelerror) {
                 Write-Message -Level Verbose -Message "$parallelerror"
             }
         } else {
-            foreach ($file in $allpaths) { Invoke-Command -ScriptBlock $scriptblock -ArgumentList $file }
+            foreach ($file in $allpaths) { Invoke-Command -ScriptBlock $scriptBlock -ArgumentList $file }
         }
     }
 }

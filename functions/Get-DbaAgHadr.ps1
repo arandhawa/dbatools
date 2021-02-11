@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Get-DbaAgHadr {
     <#
     .SYNOPSIS
@@ -11,7 +10,11 @@ function Get-DbaAgHadr {
         The target SQL Server instance or instances.
 
     .PARAMETER SqlCredential
-        Login to the target instance using alternative credentials. Windows and SQL Authentication supported. Accepts credential objects (Get-Credential)
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER EnableException
         By default, when something goes wrong we try to catch it, interpret it and give you a friendly warning message.
@@ -19,7 +22,7 @@ function Get-DbaAgHadr {
         Using this switch turns this "nice by default" feature off and enables you to catch exceptions with your own try/catch.
 
     .NOTES
-        Tags: Hadr, HA, AG, AvailabilityGroup
+        Tags: AvailabilityGroup, HA, AG
         Author: Shawn Melton (@wsmelton), http://wsmelton.github.io
 
         Website: https://dbatools.io
@@ -33,7 +36,6 @@ function Get-DbaAgHadr {
         PS C:\> Get-DbaAgHadr -SqlInstance sql2016
 
         Returns a status of the Hadr setting for sql2016 SQL Server instance.
-
     #>
     [CmdletBinding()]
     param (
@@ -45,9 +47,9 @@ function Get-DbaAgHadr {
     process {
         foreach ($instance in $SqlInstance) {
             try {
-                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $sqlcredential
+                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
 
             Add-Member -Force -InputObject $server -MemberType NoteProperty -Name ComputerName -value $server.ComputerName

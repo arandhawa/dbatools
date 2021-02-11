@@ -47,12 +47,10 @@ function Get-DbaManagementObject {
     [CmdletBinding()]
     param (
         [parameter(ValueFromPipeline)]
-        [Alias("ServerInstance", "SqlServer", "SqlInstance")]
         [DbaInstanceParameter[]]$ComputerName = $env:COMPUTERNAME,
         [PSCredential]
         $Credential,
         [int]$VersionNumber,
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
@@ -60,7 +58,7 @@ function Get-DbaManagementObject {
         if (!$VersionNumber) {
             $VersionNumber = 0
         }
-        $scriptblock = {
+        $scriptBlock = {
             $VersionNumber = [int]$args[0]
             <# DO NOT use Write-Message as this is inside of a script block #>
             Write-Verbose -Message "Checking currently loaded SMO version"
@@ -142,13 +140,10 @@ function Get-DbaManagementObject {
         foreach ($computer in $ComputerName.ComputerName) {
             try {
                 Write-Message -Level Verbose -Message "Executing scriptblock against $computer"
-                Invoke-Command2 -ComputerName $computer -ScriptBlock $scriptblock -Credential $Credential -ArgumentList $VersionNumber -ErrorAction Stop
+                Invoke-Command2 -ComputerName $computer -ScriptBlock $scriptBlock -Credential $Credential -ArgumentList $VersionNumber -ErrorAction Stop
             } catch {
                 Stop-Function -Continue -Message "Failure" -ErrorRecord $_ -Target $ComputerName
             }
         }
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Get-DbaSqlManagementObject
     }
 }

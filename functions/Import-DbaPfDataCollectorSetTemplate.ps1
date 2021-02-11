@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Import-DbaPfDataCollectorSetTemplate {
     <#
     .SYNOPSIS
@@ -169,8 +168,8 @@ function Import-DbaPfDataCollectorSetTemplate {
         }
     }
     process {
-        
-        
+
+
         if ((Test-Bound -ParameterName Path -Not) -and (Test-Bound -ParameterName Template -Not)) {
             Stop-Function -Message "You must specify Path or Template"
         }
@@ -250,7 +249,7 @@ function Import-DbaPfDataCollectorSetTemplate {
                         $instances = Invoke-Command2 -ComputerName $computer -Credential $Credential -ScriptBlock $instancescript -ErrorAction Stop -Raw
                     }
 
-                    $scriptblock = {
+                    $scriptBlock = {
                         try {
                             $results = Invoke-Command2 -ComputerName $computer -Credential $Credential -ScriptBlock $setscript -ArgumentList $Name, $plainxml -ErrorAction Stop
                             Write-Message -Level Verbose -Message " $results"
@@ -261,12 +260,12 @@ function Import-DbaPfDataCollectorSetTemplate {
 
                     if ((Get-DbaPfDataCollectorSet -ComputerName $computer -CollectorSet $Name)) {
                         if ($Pscmdlet.ShouldProcess($computer, "CollectorSet $Name already exists. Modify?")) {
-                            Invoke-Command -Scriptblock $scriptblock
+                            Invoke-Command -Scriptblock $scriptBlock
                             $output = Get-DbaPfDataCollectorSet -ComputerName $computer -CollectorSet $Name
                         }
                     } else {
                         if ($Pscmdlet.ShouldProcess($computer, "Importing collector set $Name")) {
-                            Invoke-Command -Scriptblock $scriptblock
+                            Invoke-Command -Scriptblock $scriptBlock
                             $output = Get-DbaPfDataCollectorSet -ComputerName $computer -CollectorSet $Name
                         }
                     }

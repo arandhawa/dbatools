@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Add-DbaDbMirrorMonitor {
     <#
     .SYNOPSIS
@@ -13,7 +12,11 @@ function Add-DbaDbMirrorMonitor {
         The target SQL Server instance
 
     .PARAMETER SqlCredential
-        Login to the target instance using alternate Windows or SQL Login Authentication. Accepts credential objects (Get-Credential).
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER WhatIf
         Shows what would happen if the command were to run. No actions are actually performed.
@@ -27,7 +30,7 @@ function Add-DbaDbMirrorMonitor {
         Using this switch turns this "nice by default" feature off and enables you to catch exceptions with your own try/catch.
 
     .NOTES
-        Tags: Mirror, HA
+        Tags: Mirroring, Mirror, HA
         Author: Chrissy LeMaire (@cl), netnerds.net
 
         Website: https://dbatools.io
@@ -41,7 +44,6 @@ function Add-DbaDbMirrorMonitor {
         PS C:\> Add-DbaDbMirrorMonitor -SqlInstance sql2008, sql2012
 
         Creates a database mirroring monitor job that periodically updates the mirroring status for every mirrored database on sql2008 and sql2012.
-
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Low')]
     param (
@@ -55,7 +57,7 @@ function Add-DbaDbMirrorMonitor {
             try {
                 $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential -MinimumVersion 9
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
 
             if ($Pscmdlet.ShouldProcess($instance, "add mirror monitoring")) {

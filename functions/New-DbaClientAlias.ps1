@@ -65,18 +65,17 @@ function New-DbaClientAlias {
         [DbaInstanceParameter[]]$ComputerName = $env:COMPUTERNAME,
         [PSCredential]$Credential,
         [parameter(Mandatory, ValueFromPipeline)]
-        [DbaInstanceParameter[]]$ServerName,
+        [DbaInstanceParameter]$ServerName,
         [parameter(Mandatory)]
         [string]$Alias,
         [ValidateSet("TCPIP", "NamedPipes")]
         [string]$Protocol = "TCPIP",
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
     begin {
         # This is a script block so cannot use messaging system
-        $scriptblock = {
+        $scriptBlock = {
             $basekeys = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\MSSQLServer", "HKLM:\SOFTWARE\Microsoft\MSSQLServer"
             #Variable marked as unused by PSScriptAnalyzer
             #$ServerName = $args[0]
@@ -87,10 +86,6 @@ function New-DbaClientAlias {
 
             foreach ($basekey in $basekeys) {
                 if ($64bit -ne $true -and $basekey -like "*WOW64*") { continue }
-
-                if ((Test-Path $basekey) -eq $false) {
-                    throw "Base key ($basekey) does not exist. Quitting."
-                }
 
                 $client = "$basekey\Client"
 
@@ -135,13 +130,13 @@ function New-DbaClientAlias {
 
             if ($PScmdlet.ShouldProcess($computer, "Adding $alias")) {
                 try {
-                    Invoke-Command2 -ComputerName $computer -Credential $Credential -ScriptBlock $scriptblock -ErrorAction Stop -ArgumentList $ServerName, $Alias, $serverstring
+                    Invoke-Command2 -ComputerName $computer -Credential $Credential -ScriptBlock $scriptBlock -ErrorAction Stop -ArgumentList $ServerName, $Alias, $serverstring
                 } catch {
                     Stop-Function -Message "Failure" -ErrorRecord $_ -Target $computer -Continue
                 }
             }
-        }
 
-        Get-DbaClientAlias -ComputerName $computer -Credential $Credential | Where-Object AliasName -eq $Alias
+            Get-DbaClientAlias -ComputerName $computer -Credential $Credential | Where-Object AliasName -eq $Alias
+        }
     }
 }

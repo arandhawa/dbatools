@@ -2,10 +2,8 @@ function Get-WmiHadr {
     [CmdletBinding()]
     param (
         [parameter(Mandatory, ValueFromPipeline)]
-        [Alias("ServerInstance", "SqlServer")]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$Credential,
-        [Alias('Silent')]
         [switch]$EnableException
     )
     process {
@@ -21,15 +19,15 @@ function Get-WmiHadr {
             }
 
             if ($null -eq $currentState.IsHadrEnabled) {
-                $isenabled = $false
+                $isEnabled = $false
             } else {
-                $isenabled = $currentState.IsHadrEnabled
+                $isEnabled = $currentState.IsHadrEnabled
             }
             [PSCustomObject]@{
                 ComputerName  = $computer
                 InstanceName  = $instanceName
                 SqlInstance   = $instance.FullName
-                IsHadrEnabled = $isenabled
+                IsHadrEnabled = $isEnabled
             }
         }
     }

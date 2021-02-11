@@ -72,7 +72,6 @@ function Test-DbaLoginPassword {
     #>
     [CmdletBinding()]
     param (
-        [Alias("ServerInstance", "SqlServer", "SqlServers")]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$SqlCredential,
         [String[]]$Login,
@@ -120,10 +119,10 @@ function Test-DbaLoginPassword {
     process {
         foreach ($instance in $SqlInstance) {
             try {
-                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $sqlcredential -MinimumVersion 10
+                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential -MinimumVersion 10
                 Write-Message -Message "Connected to: $instance." -Level Verbose
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
             $InputObject += Get-DbaLogin -SqlInstance $server -Login $Login
         }

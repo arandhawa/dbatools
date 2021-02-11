@@ -1,4 +1,3 @@
-#ValidationTags#CodeStyle,Messaging,FlowControl,Pipeline#
 function Get-DbaBuildReference {
     <#
     .SYNOPSIS
@@ -30,10 +29,14 @@ function Get-DbaBuildReference {
         Target any number of instances, in order to return their build state.
 
     .PARAMETER SqlCredential
-        When connecting to an instance, use the credentials specified.
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER Update
-        Looks online for the most up to date reference, replacing the local one.
+        Adding this switch will look online for the most up to date reference, optionally replacing the local one.
 
     .PARAMETER EnableException
         By default, when something goes wrong we try to catch it, interpret it and give you a friendly warning message.
@@ -67,7 +70,7 @@ function Get-DbaBuildReference {
         Returns information builds identified by these versions strings
 
     .EXAMPLE
-        PS C:\> Get-DbaCmsRegServer -SqlInstance sqlserver2014a | Get-DbaBuildReference
+        PS C:\> Get-DbaRegServer -SqlInstance sqlserver2014a | Get-DbaBuildReference
 
         Integrate with other cmdlets to have builds checked for all your registered servers on sqlserver2014a
 
@@ -95,23 +98,84 @@ function Get-DbaBuildReference {
         $CumulativeUpdate,
 
         [Parameter(ValueFromPipeline)]
-        [Alias("ServerInstance", "SqlServer")]
         [DbaInstanceParameter[]]
         $SqlInstance,
 
-        [Alias("Credential")]
         [PsCredential]
         $SqlCredential,
 
         [switch]
         $Update,
 
-        [switch]
-        [Alias('Silent')]
-        $EnableException
+        [switch]$EnableException
     )
 
     begin {
+
+        #region verifying parameters
+        $isPipelineSqlInstance = $PSCmdlet.MyInvocation.ExpectingInput
+        $ComplianceSpec = @()
+        $ComplianceSpecExclusiveParams = @('Build', 'Kb', @( 'MajorVersion', 'ServicePack', 'CumulativeUpdate'), 'SqlInstance')
+        foreach ($exclParamGroup in $ComplianceSpecExclusiveParams) {
+            foreach ($exclParam in $exclParamGroup) {
+                if ($exclParam -eq 'SqlInstance') {
+                    if ($isPipelineSqlInstance -or (Test-Bound -ParameterName 'SqlInstance')) {
+                        $ComplianceSpec += $exclParam
+                    }
+                } else {
+                    if (Test-Bound -ParameterName $exclParam) {
+                        $ComplianceSpec += $exclParam
+                        break
+                    }
+                }
+            }
+        }
+        if ($ComplianceSpec.Length -eq 0 -and (Test-Bound -Not -ParameterName 'Update') -and (-not($isPipelineSqlInstance))) {
+            Stop-Function -Category InvalidArgument -Message "You need to choose at least one parameter."
+            return
+        }
+        if ($ComplianceSpec.Length -gt 1) {
+            Stop-Function -Category InvalidArgument -Message "$($ComplianceSpec -join ', ') are mutually exclusive. Please choose one or the other. Quitting."
+            return
+        }
+        if (((Test-Bound -ParameterName 'ServicePack') -or (Test-Bound -ParameterName 'CumulativeUpdate')) -and (Test-Bound -Not -ParameterName 'MajorVersion')) {
+            Stop-Function -Category InvalidArgument -Message "-MajorVersion is required when specifying SP or CU."
+            return
+        }
+        if ($MajorVersion) {
+            if ($MajorVersion -match '^(SQL)?(\d{4}(R2)?)$') {
+                $MajorVersion = $Matches[2]
+            } else {
+                Stop-Function -Message "Incorrect SQL Server version format: use SQL2XXX or just 2XXXX - SQL2012, SQL2008R2"
+                return
+            }
+            if (!$ServicePack) {
+                $ServicePack = 'RTM'
+            }
+            if ($ServicePack -match '^(SP)?\s*(\d+)$') {
+                if ($Matches[2] -eq '0') {
+                    $ServicePack = 'RTM'
+                } else {
+                    $ServicePack = 'SP' + $Matches[2]
+                }
+            } elseif ($ServicePack -notmatch '^RTM$') {
+                Stop-Function -Message "Incorrect SQL Server service pack format: use SPX, X or RTM, where X is a service pack number"
+                return
+            }
+            if ($CumulativeUpdate) {
+                if ($CumulativeUpdate -match '^(CU)?\s*(\d+)$') {
+                    if ($Matches[2] -eq '0') {
+                        $CumulativeUpdate = ''
+                    } else {
+                        $CumulativeUpdate = 'CU' + $Matches[2]
+                    }
+                } else {
+                    Stop-Function -Message "Incorrect SQL Server cumulative update format: use CUX or X, where X is a cumulative update number"
+                    return
+                }
+            }
+        }
+        #endregion verifying parameters
 
         #region Helper functions
         function Get-DbaBuildReferenceIndex {
@@ -127,16 +191,16 @@ function Get-DbaBuildReference {
                 $EnableException
             )
 
-            $orig_idxfile = "$Moduledirectory\bin\dbatools-buildref-index.json"
+            $orig_idxfile = Resolve-Path "$Moduledirectory\bin\dbatools-buildref-index.json"
             $DbatoolsData = Get-DbatoolsConfigValue -Name 'Path.DbatoolsData'
             $writable_idxfile = Join-Path $DbatoolsData "dbatools-buildref-index.json"
 
             if (-not (Test-Path $orig_idxfile)) {
-                Write-Message -Level Warning -Message "Unable to read local SQL build reference file. Check your module integrity!"
+                Write-Message -Level Warning -Message "Unable to read local SQL build reference file. Please check your module integrity or reinstall dbatools."
             }
 
             if ((-not (Test-Path $orig_idxfile)) -and (-not (Test-Path $writable_idxfile))) {
-                throw "Build reference file not found, check module health!"
+                throw "Build reference file not found, please check module health."
             }
 
             # If no writable copy exists, create one and return the module original
@@ -153,26 +217,15 @@ function Get-DbaBuildReference {
                 $module_time = Get-Date $module_content.LastUpdated
                 $data_time = Get-Date $data_content.LastUpdated
 
-                $offline_time = $module_time
                 if ($module_time -gt $data_time) {
                     Copy-Item -Path $orig_idxfile -Destination $writable_idxfile -Force -ErrorAction Stop
                     $result = $module_content
                 } else {
                     $result = $data_content
-                    $offline_time = $data_time
                 }
                 # If Update is passed, try to fetch from online resource and store into the writeable
                 if ($Update) {
-                    $WebContent = Get-DbaBuildReferenceIndexOnline -EnableException $EnableException
-                    if ($null -ne $WebContent) {
-                        $webdata_content = $WebContent.Content | ConvertFrom-Json
-                        $webdata_time = Get-Date $webdata_content.LastUpdated
-                        if ($webdata_time -gt $offline_time) {
-                            Write-Message -Level Output -Message "Index updated correctly, last update on: $(Get-Date -Date $webdata_time -Format s), was $(Get-Date -Date $offline_time -Format s)"
-                            $WebContent.Content | Out-File $writable_idxfile -Encoding utf8 -ErrorAction Stop
-                            $result = Get-Content $writable_idxfile -Raw | ConvertFrom-Json
-                        }
-                    }
+                    Update-DbaBuildReference -EnableException -ErrorAction Stop
                 }
             }
 
@@ -189,27 +242,6 @@ function Get-DbaBuildReference {
             $result.Data | Select-Object @{ Name = "VersionObject"; Expression = { [version]$_.Version } }, *
         }
 
-        function Get-DbaBuildReferenceIndexOnline {
-            [CmdletBinding()]
-            param (
-                [bool]
-                $EnableException
-            )
-            $url = Get-DbatoolsConfigValue -Name 'assets.sqlbuildreference'
-            try {
-                $WebContent = Invoke-TlsWebRequest $url -ErrorAction Stop
-            } catch {
-                try {
-                    Write-Message -Level Verbose -Message "Probably using a proxy for internet access, trying default proxy settings"
-                    (New-Object System.Net.WebClient).Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
-                    $WebContent = Invoke-TlsWebRequest $url -ErrorAction Stop
-                } catch {
-                    Write-Message -Level Warning -Message "Couldn't download updated index from $url"
-                    return
-                }
-            }
-            return $WebContent
-        }
 
         function Resolve-DbaBuild {
             [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSUseShouldProcessForStateChangingFunctions", "")]
@@ -299,9 +331,15 @@ function Get-DbaBuildReference {
                 $Detected.KB = $el.KBList
                 if (($Build -and $el.Version -eq $Build) -or ($Kb -and $el.KBList -eq $currentKb)) {
                     $Detected.MatchType = 'Exact'
+                    if ($el.Retired) {
+                        $Detected.Warning = "This version has been officially retired by Microsoft"
+                    }
                     break
                 } elseif ($MajorVersion -and $Detected.SP -contains $ServicePack -and (!$CumulativeUpdate -or ($el.CU -and $el.CU -eq $CumulativeUpdate))) {
                     $Detected.MatchType = 'Exact'
+                    if ($el.Retired) {
+                        $Detected.Warning = "This version has been officially retired by Microsoft"
+                    }
                     break
                 }
             }
@@ -309,7 +347,7 @@ function Get-DbaBuildReference {
         }
         #endregion Helper functions
 
-        $moduledirectory = $MyInvocation.MyCommand.Module.ModuleBase
+        $moduledirectory = $script:PSModuleRoot
 
         try {
             $IdxRef = Get-DbaBuildReferenceIndex -Moduledirectory $moduledirectory -Update $Update -EnableException $EnableException
@@ -319,66 +357,8 @@ function Get-DbaBuildReference {
         }
     }
     process {
+
         if (Test-FunctionInterrupt) { return }
-
-        #region verifying parameters
-        $ComplianceSpec = @()
-        $ComplianceSpecExclusiveParams = @('Build', 'Kb', @( 'MajorVersion', 'ServicePack', 'CumulativeUpdate'), 'SqlInstance')
-        foreach ($exclParamGroup in $ComplianceSpecExclusiveParams) {
-            foreach ($exclParam in $exclParamGroup) {
-                if (Test-Bound -Parameter $exclParam) {
-                    $ComplianceSpec += $exclParam
-                    break
-                }
-            }
-        }
-        if ($ComplianceSpec.Length -gt 1) {
-            Stop-Function -Category InvalidArgument -Message "$($ComplianceSpec -join ', ') are mutually exclusive. Please choose one or the other. Quitting."
-            return
-        }
-        if ($ComplianceSpec.Length -eq 0) {
-            Stop-Function -Category InvalidArgument -Message "You need to choose at least one parameter."
-            return
-        }
-        if (((Test-Bound -Parameter ServicePack) -or (Test-Bound -Parameter CumulativeUpdate)) -and (Test-Bound -Not -Parameter MajorVersion)) {
-            Stop-Function -Category InvalidArgument -Message "-MajorVersion is required when specifying SP or CU."
-            return
-        }
-        if ($MajorVersion) {
-            if ($MajorVersion -match '^(SQL)?(\d{4}(R2)?)$') {
-                $MajorVersion = $Matches[2]
-            } else {
-                Stop-Function -Message "Incorrect SQL Server version format: use SQL2XXX or just 2XXXX - SQL2012, SQL2008R2"
-                return
-            }
-            if (!$ServicePack) {
-                $ServicePack = 'RTM'
-            }
-            if ($ServicePack -match '^(SP)?\s*(\d+)$') {
-                if ($Matches[2] -eq '0') {
-                    $ServicePack = 'RTM'
-                } else {
-                    $ServicePack = 'SP' + $Matches[2]
-                }
-            } elseif ($ServicePack -notmatch '^RTM$') {
-                Stop-Function -Message "Incorrect SQL Server service pack format: use SPX, X or RTM, where X is a service pack number"
-                return
-            }
-            if ($CumulativeUpdate) {
-                if ($CumulativeUpdate -match '^(CU)?\s*(\d+)$') {
-                    if ($Matches[2] -eq '0') {
-                        $CumulativeUpdate = ''
-                    } else {
-                        $CumulativeUpdate = 'CU' + $Matches[2]
-                    }
-                } else {
-                    Stop-Function -Message "Incorrect SQL Server cumulative update format: use CUX or X, where X is a cumulative update number"
-                    return
-                }
-            }
-        }
-        #endregion verifying parameters
-
 
         foreach ($instance in $SqlInstance) {
             #region Ensure the connection is established
@@ -391,7 +371,7 @@ function Get-DbaBuildReference {
             try {
                 $null = $server.Version.ToString()
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
             #endregion Ensure the connection is established
 
@@ -461,8 +441,5 @@ function Get-DbaBuildReference {
                 Warning        = $Detected.Warning
             } | Select-DefaultView -ExcludeProperty SqlInstance
         }
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Get-DbaSqlBuildReference
     }
 }

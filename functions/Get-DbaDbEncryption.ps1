@@ -10,7 +10,11 @@ function Get-DbaDbEncryption {
         The target SQL Server instance or instances. This can be a collection and receive pipeline input.
 
     .PARAMETER SqlCredential
-        Login to the target instance using alternative credentials. Windows and SQL Authentication supported. Accepts credential objects (Get-Credential)
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER Database
         The database(s) to process - this list is auto-populated from the server. If unspecified, all databases will be processed.
@@ -61,14 +65,11 @@ function Get-DbaDbEncryption {
     [CmdletBinding()]
     param (
         [parameter(ValueFromPipeline, Mandatory)]
-        [Alias("ServerInstance", "SqlServer")]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$SqlCredential,
-        [Alias("Databases")]
         [object[]]$Database,
         [object[]]$ExcludeDatabase,
         [switch]$IncludeSystemDBs,
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
@@ -79,7 +80,7 @@ function Get-DbaDbEncryption {
             try {
                 $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
 
             #If IncludeSystemDBs is true, include systemdbs
@@ -104,7 +105,7 @@ function Get-DbaDbEncryption {
                 Write-Message -Level Verbose -Message "Processing $db"
 
                 if ($db.EncryptionEnabled -eq $true) {
-                    [PSCustomObject]@{
+                    $returnCertificate = [PSCustomObject]@{
                         ComputerName             = $server.ComputerName
                         InstanceName             = $server.ServiceName
                         SqlInstance              = $server.DomainInstanceName
@@ -120,6 +121,27 @@ function Get-DbaDbEncryption {
                         ExpirationDate           = $null
                     }
 
+                    if ($db.DatabaseEncryptionKey.EncryptionType -eq 'ServerCertificate') {
+                        $serverCertificate = $server.Databases['master'].Certificates | Where-Object {
+                            (Compare-Object -ReferenceObject $db.DatabaseEncryptionKey.Thumbprint -DifferenceObject $_.Thumbprint -SyncWindow 0).Length -eq 0
+                        }
+
+                        if (-not $serverCertificate) {
+                            Stop-Function -Message "Could not locate TDE server certificate $($db.DatabaseEncryptionKey.Name)" -Target $instance -Continue
+                        }
+
+                        $returnCertificate.Name = $serverCertificate.Name
+                        $returnCertificate.LastBackup = $serverCertificate.LastBackupDate
+                        $returnCertificate.PrivateKeyEncryptionType = $serverCertificate.PrivateKeyEncryptionType
+                        $returnCertificate.Owner = $serverCertificate.Owner
+                        $returnCertificate.Object = $serverCertificate
+                        $returnCertificate.ExpirationDate = $serverCertificate.ExpirationDate
+                        If ($true -eq $db.DatabaseEncryptionKey.Properties.Contains("EncryptionAlgorithm")) {
+                            $returnCertificate.EncryptionAlgorithm = $db.DatabaseEncryptionKey.Properties["EncryptionAlgorithm"].value
+                        }
+                    }
+
+                    $returnCertificate
                 }
 
                 foreach ($cert in $db.Certificates) {
@@ -177,8 +199,5 @@ function Get-DbaDbEncryption {
                 }
             }
         }
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Get-DbaDatabaseEncryption
     }
 }

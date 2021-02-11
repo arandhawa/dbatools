@@ -1,4 +1,3 @@
-#ValidationTags#FlowControl,Pipeline#
 function Remove-DbaSpn {
     <#
     .SYNOPSIS
@@ -76,7 +75,6 @@ function Remove-DbaSpn {
         [string]$ServiceAccount,
         [Parameter(ValueFromPipelineByPropertyName)]
         [PSCredential]$Credential,
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
@@ -116,7 +114,7 @@ function Remove-DbaSpn {
                 if ($spnadobject -contains $spn) {
                     $null = $spnadobject.Remove($spn)
                     $adentry.CommitChanges()
-                    Write-Message -Message "Remove SPN $spn for $serviceaccount" -Level Verbose
+                    Write-Message -Message "Remove SPN $spn for $ServiceAccount" -Level Verbose
                     $set = $false
                     $status = "Successfully removed SPN"
                 }

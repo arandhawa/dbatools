@@ -1,8 +1,7 @@
-#ValidationTags#CodeStyle,Messaging,FlowControl,Pipeline#
 function Get-DbaProductKey {
     <#
     .SYNOPSIS
-        Gets SQL Server Product Keys from local or destination SQL Servers. Works with SQL Server 2005-2017
+        Gets SQL Server Product Keys from local or destination SQL Servers. Works with SQL Server 2008-2019
 
     .DESCRIPTION
         This command find the product key for all installed instances. Clustered instances are supported as well.
@@ -53,7 +52,7 @@ function Get-DbaProductKey {
     )
 
     begin {
-        $scriptblock = {
+        $scriptBlock = {
             $versionMajor = $args[0]
             $instanceReg = $args[1]
             $edition = $args[2]
@@ -126,6 +125,10 @@ function Get-DbaProductKey {
                     $key = @("$($instanceReg.Path)\Setup\DigitalProductID", "$($instanceReg.Path)\ClientSetup\DigitalProductID")
                     $sqlversion = "SQL Server 2017 $servicePack"
                 }
+                15 {
+                    $key = @("$($instanceReg.Path)\Setup\DigitalProductID", "$($instanceReg.Path)\ClientSetup\DigitalProductID")
+                    $sqlversion = "SQL Server 2019 $servicePack"
+                }
                 default {
                     Stop-Function -Message "SQL version not currently supported." -Continue
                 }
@@ -181,7 +184,7 @@ function Get-DbaProductKey {
                 try {
                     $server = Connect-SqlInstance -SqlInstance $instanceReg.SqlInstance -SqlCredential $SqlCredential -MinimumVersion 10
                 } catch {
-                    Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instanceReg.SqlInstance -Continue
+                    Stop-Function -Message "Error occurred while establishing connection to $instanceReg.SqlInstance" -Category ConnectionError -ErrorRecord $_ -Target $instanceReg.SqlInstance -Continue
                 }
 
                 $servicePack = $server.ProductLevel
@@ -189,7 +192,7 @@ function Get-DbaProductKey {
                 Write-Message -Level Debug -Message "$instance $instanceName version is $($server.VersionMajor)"
 
                 try {
-                    $results = Invoke-Command2 -ComputerName $computer.ComputerName -Credential $Credential -ScriptBlock $scriptblock -ArgumentList $server.VersionMajor, $instanceReg, $server.Edition
+                    $results = Invoke-Command2 -ComputerName $computer.ComputerName -Credential $Credential -ScriptBlock $scriptBlock -ArgumentList $server.VersionMajor, $instanceReg, $server.Edition
                 } catch {
                     Stop-Function -Message "Failure" -ErrorRecord $_
                 }
@@ -204,9 +207,5 @@ function Get-DbaProductKey {
                 }
             }
         }
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Get-SqlServerKey
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Get-DbaSqlProductKey
     }
 }

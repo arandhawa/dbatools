@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function Disable-DbaAgHadr {
     <#
     .SYNOPSIS
@@ -29,7 +28,7 @@ function Disable-DbaAgHadr {
         Using this switch turns this "nice by default" feature off and enables you to catch exceptions with your own try/catch.
 
     .NOTES
-        Tags: Hadr, AG, AvailabilityGroup
+        Tags: AvailabilityGroup, HA, AG
         Author: Shawn Melton (@wsmelton), http://wsmelton.github.io
 
         Website: https://dbatools.io
@@ -53,7 +52,6 @@ function Disable-DbaAgHadr {
         PS C:\> Disable-DbaAgHadr -SqlInstance sql2012\dev1 -Force
 
         Sets Hadr service to disabled for the instance dev1 on sq2012, and restart the service to apply the change.
-
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = "High")]
     param (
@@ -63,6 +61,9 @@ function Disable-DbaAgHadr {
         [switch]$Force,
         [switch]$EnableException
     )
+    begin {
+        if ($Force) { $ConfirmPreference = 'none' }
+    }
     process {
         foreach ($instance in $SqlInstance) {
             $computer = $computerFullName = $instance.ComputerName
@@ -99,7 +100,7 @@ function Disable-DbaAgHadr {
             }
             #>
 
-            $scriptblock = {
+            $scriptBlock = {
                 $instance = $args[0]
                 $sqlService = $wmi.Services | Where-Object DisplayName -eq "SQL Server ($instance)"
                 $sqlService.ChangeHadrServiceSetting(0)
@@ -108,7 +109,7 @@ function Disable-DbaAgHadr {
             if ($noChange -eq $false) {
                 if ($PSCmdlet.ShouldProcess($instance, "Changing Hadr from $isHadrEnabled to 0 for $instance")) {
                     try {
-                        Invoke-ManagedComputerCommand -ComputerName $computerFullName -Credential $Credential -ScriptBlock $scriptblock -ArgumentList $instancename
+                        Invoke-ManagedComputerCommand -ComputerName $computerFullName -Credential $Credential -ScriptBlock $scriptBlock -ArgumentList $instanceName
                     } catch {
                         Stop-Function -Continue -Message "Failure on $($instance.FullName) | This may be because AlwaysOn Availability Groups feature requires the x86(non-WOW) or x64 Enterprise Edition of SQL Server 2012 (or later version) running on Windows Server 2008 (or later version) with WSFC hotfix KB 2494036 installed."
                     }

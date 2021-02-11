@@ -29,6 +29,13 @@ Function Invoke-DbaAdvancedUpdate {
           to avoid the double-hop issue.
         * Default when -Credential is not specified. Will likely fail if a network path is specified.
 
+    .PARAMETER ExtractPath
+        Lets you specify a location to extract the update file to on the system requiring the update. e.g. C:\temp
+
+    .PARAMETER ArgumentList
+        A list of extra arguments to pass to the execution file. Accepts one or more strings containing command line parameters.
+        Example: ... -ArgumentList "/SkipRules=RebootRequiredCheck", "/Q"
+
     .PARAMETER WhatIf
         Shows what would happen if the command were to run. No actions are actually performed.
 
@@ -40,10 +47,25 @@ Function Invoke-DbaAdvancedUpdate {
         This avoids overwhelming you with "sea of red" exceptions, but is inconvenient because it basically disables advanced scripting.
         Using this switch turns this "nice by default" feature off and enables you to catch exceptions with your own try/catch.
 
+    .NOTES
+        Tags: Instance, Update
+        Website: https://dbatools.io
+        Copyright: (c) 2018 by dbatools, licensed under MIT
+        License: MIT https://opensource.org/licenses/MIT
+
+    .LINK
+        https://dbatools.io/Invoke-DbaAdvancedUpdate
+
     .EXAMPLE
     PS C:\> Invoke-DbaAdvancedUpdate -ComputerName SQL1 -Action $actions
 
     Invokes update actions on SQL1 after restarting it.
+
+    .EXAMPLE
+    PS C:\> Invoke-DbaAdvancedUpdate -ComputerName SQL1 -Action $actions -ExtractPath C:\temp
+
+    Extracts required files to the specific location "C:\temp". Invokes update actions on SQL1 after restarting it.
+
     #>
     [CmdletBinding(SupportsShouldProcess)]
     Param (
@@ -53,7 +75,10 @@ Function Invoke-DbaAdvancedUpdate {
         [ValidateSet('Default', 'Basic', 'Negotiate', 'NegotiateWithImplicitCredential', 'Credssp', 'Digest', 'Kerberos')]
         [string]$Authentication = 'Credssp',
         [pscredential]$Credential,
+        [string]$ExtractPath,
+        [string[]]$ArgumentList,
         [switch]$EnableException
+
     )
     $computer = $ComputerName
     $activity = "Updating SQL Server components on $computer"
@@ -100,34 +125,34 @@ Function Invoke-DbaAdvancedUpdate {
         }
         if ($Credential) {
             $execParams.Credential = $Credential
+        }
+
+        if (!$ExtractPath) {
+            # Find a temporary folder to extract to - the drive that has most free space
+            try {
+                $chosenDrive = (Get-DbaDiskSpace -ComputerName $computer -Credential $Credential -EnableException:$true | Sort-Object -Property Free -Descending | Select-Object -First 1).Name
+                if (!$chosenDrive) {
+                    # Fall back to the system drive
+                    $chosenDrive = Invoke-Command2 -ComputerName $computer -Credential $Credential -ScriptBlock { $env:SystemDrive } -Raw -ErrorAction Stop
+                }
+            } catch {
+                $msg = "Failed to retrieve a disk drive to extract the update"
+                $output.Notes += $msg
+                Stop-Function -Message $msg -ErrorRecord $_
+                return $output
+            }
         } else {
-            if (Test-Bound -Not Authentication) {
-                # Use Default authentication instead of CredSSP when Authentication is not specified and Credential is null
-                $execParams.Authentication = "Default"
-            }
+            $chosenDrive = $ExtractPath
         }
-        # Find a temporary folder to extract to - the drive that has most free space
-        try {
-            $chosenDrive = (Get-DbaDiskSpace -ComputerName $computer -Credential $Credential -EnableException:$true | Sort-Object -Property Free -Descending | Select-Object -First 1).Name
-            if (!$chosenDrive) {
-                # Fall back to the system drive
-                $chosenDrive = Invoke-Command2 -ComputerName $computer -Credential $Credential -ScriptBlock { $env:SystemDrive } -Raw -ErrorAction Stop
-            }
-        } catch {
-            $msg = "Failed to retrieve a disk drive to extract the update"
-            $output.Notes += $msg
-            Stop-Function -Message $msg -ErrorRecord $_
-            return $output
-        }
-        $spExtractPath = $chosenDrive.TrimEnd('\') + "\dbatools_KB$($currentAction.KB)_Extract"
+        $spExtractPath = $chosenDrive.TrimEnd('\') + "\dbatools_KB$($currentAction.KB)_Extract_$([guid]::NewGuid().Guid.Replace('-',''))"
         $output.ExtractPath = $spExtractPath
         try {
             # Extract file
             Write-ProgressHelper -ExcludePercent -Activity $activity -Message "Extracting $($currentAction.Installer) to $spExtractPath"
             Write-Message -Level Verbose -Message "Extracting $($currentAction.Installer) to $spExtractPath"
-            $extractResult = Invoke-Program @execParams -Path $currentAction.Installer -ArgumentList "/x`:`"$spExtractPath`" /quiet" -Fallback
+            $extractResult = Invoke-Program @execParams -Path $currentAction.Installer -ArgumentList @("/x`:`"$spExtractPath`"", "/quiet") -Fallback
             if (-not $extractResult.Successful) {
-                $msg = "Extraction failed with exit code $($extractResult.ExitCode)"
+                $msg = "Extraction failed with exit code $($extractResult.ExitCode), try specifying a different location using -ExtractPath"
                 $output.Notes += $msg
                 Stop-Function -Message $msg
                 return $output
@@ -138,9 +163,14 @@ Function Invoke-DbaAdvancedUpdate {
             } else {
                 $instanceClause = '/allinstances'
             }
+            if ($currentAction.Build -like "10.0.*") {
+                $programArgumentList = $ArgumentList + @('/quiet', $instanceClause)
+            } else {
+                $programArgumentList = $ArgumentList + @('/quiet', $instanceClause, '/IAcceptSQLServerLicenseTerms')
+            }
             Write-ProgressHelper -ExcludePercent -Activity $activity -Message "Now installing update SQL$($currentAction.MajorVersion)$($currentAction.TargetLevel) from $spExtractPath"
             Write-Message -Level Verbose -Message "Starting installation from $spExtractPath"
-            $updateResult = Invoke-Program @execParams -Path "$spExtractPath\setup.exe" -ArgumentList @('/quiet', $instanceClause, '/IAcceptSQLServerLicenseTerms') -WorkingDirectory $spExtractPath -Fallback
+            $updateResult = Invoke-Program @execParams -Path "$spExtractPath\setup.exe" -ArgumentList $programArgumentList -WorkingDirectory $spExtractPath -Fallback
             $output.ExitCode = $updateResult.ExitCode
             if ($updateResult.Successful) {
                 $output.Successful = $true
@@ -161,7 +191,7 @@ Function Invoke-DbaAdvancedUpdate {
             try {
                 Write-ProgressHelper -ExcludePercent -Activity $activity -Message "Removing temporary files"
                 $null = Invoke-CommandWithFallBack @execParams -ScriptBlock {
-                    if ($args[0] -like '*\dbatools_KB*_Extract' -and (Test-Path $args[0])) {
+                    if ($args[0] -like '*\dbatools_KB*_Extract*' -and (Test-Path $args[0])) {
                         Remove-Item -Recurse -Force -LiteralPath $args[0] -ErrorAction Stop
                     }
                 } -Raw -ArgumentList $spExtractPath

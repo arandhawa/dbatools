@@ -4,13 +4,18 @@ function Disable-DbaTraceFlag {
         Disable a Global Trace Flag that is currently running
 
     .DESCRIPTION
-        The function will disable a Trace Flag that is currently running globally on the SQL Server instance(s) listed
+        The function will disable a Trace Flag that is currently running globally on the SQL Server instance(s) listed.
+        These are not persisted after a restart, use Set-DbaStartupParameter to set them to persist after restarts.
 
     .PARAMETER SqlInstance
         The target SQL Server instance or instances.
 
     .PARAMETER SqlCredential
-        Login to the target instance using alternative credentials. Windows and SQL Authentication supported. Accepts credential objects (Get-Credential)
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER TraceFlag
         Trace flag number to enable globally
@@ -39,13 +44,11 @@ function Disable-DbaTraceFlag {
     #>
     [CmdletBinding()]
     param (
-        [parameter(Position = 0, Mandatory, ValueFromPipeline)]
-        [Alias("ServerInstance", "SqlServer", "SqlServers")]
+        [parameter(Mandatory, ValueFromPipeline)]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$SqlCredential,
         [parameter(Mandatory)]
         [int[]]$TraceFlag,
-        [Alias('Silent')]
         [switch]$EnableException
     )
 
@@ -55,7 +58,7 @@ function Disable-DbaTraceFlag {
             try {
                 $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential
             } catch {
-                Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
 
             $current = Get-DbaTraceFlag -SqlInstance $server -EnableException

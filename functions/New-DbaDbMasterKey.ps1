@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline,CodeStyle#
 function New-DbaDbMasterKey {
     <#
     .SYNOPSIS
@@ -11,7 +10,11 @@ function New-DbaDbMasterKey {
         The target SQL Server instance or instances.
 
     .PARAMETER SqlCredential
-        Allows you to login to SQL Server using alternative credentials.
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER Credential
         Enables easy creation of a secure password.
@@ -43,6 +46,9 @@ function New-DbaDbMasterKey {
         Website: https://dbatools.io
         Copyright: (c) 2018 by dbatools, licensed under MIT
         License: MIT https://opensource.org/licenses/MIT
+
+    .LINK
+        https://dbatools.io/New-DbaDbMasterKey
 
     .EXAMPLE
         PS C:\> New-DbaDbMasterKey -SqlInstance Server1
@@ -84,7 +90,7 @@ function New-DbaDbMasterKey {
     }
     process {
         if ($SqlInstance) {
-            $InputObject += Get-DbaDatabase -SqlInstance $SqlInstance -Database $Database -ExcludeDatabase $ExcludeDatabase
+            $InputObject += Get-DbaDatabase -SqlInstance $SqlInstance -Database $Database -ExcludeDatabase $ExcludeDatabase -SqlCredential $SqlCredential
         }
 
         foreach ($db in $InputObject) {
@@ -108,8 +114,5 @@ function New-DbaDbMasterKey {
                 }
             }
         }
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias New-DbaDatabaseMasterKey
     }
 }

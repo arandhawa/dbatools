@@ -1,4 +1,3 @@
-#ValidationTags#Messaging,FlowControl,Pipeline#
 function Set-DbaDbState {
     <#
     .SYNOPSIS
@@ -18,7 +17,11 @@ function Set-DbaDbState {
         The target SQL Server instance or instances
 
     .PARAMETER SqlCredential
-        Credential object used to connect to the SQL Server as a different user
+        Login to the target instance using alternative credentials. Accepts PowerShell credentials (Get-Credential).
+
+        Windows Authentication, SQL Server Authentication, Active Directory - Password, and Active Directory - Integrated are all supported.
+
+        For MFA support, please use Connect-DbaInstance.
 
     .PARAMETER Database
         The database(s) to process - this list is auto-populated from the server. if unspecified, all databases will be processed.
@@ -117,15 +120,12 @@ function Set-DbaDbState {
         Gets the databases from Get-DbaDatabase, and sets them as SINGLE_USER, dropping all other connections (and rolling back open transactions)
 
     #>
-    [CmdletBinding(DefaultParameterSetName = "Default", SupportsShouldProcess)]
+    [CmdletBinding(DefaultParameterSetName = "Default", SupportsShouldProcess, ConfirmImpact = "Medium")]
     param (
         [parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = "Server")]
-        [Alias("ServerInstance", "SqlServer")]
         [DbaInstanceParameter[]]$SqlInstance,
-        [Alias("Credential")]
         [PSCredential]
         $SqlCredential,
-        [Alias("Databases")]
         [object[]]$Database,
         [object[]]$ExcludeDatabase,
         [switch]$AllDatabases,
@@ -139,17 +139,18 @@ function Set-DbaDbState {
         [switch]$RestrictedUser,
         [switch]$MultiUser,
         [switch]$Force,
-        [Alias('Silent')]
         [switch]$EnableException,
         [parameter(Mandatory, ValueFromPipeline, ParameterSetName = "Database")]
         [PsCustomObject[]]$InputObject
     )
 
     begin {
-        function Get-WrongCombo($optset, $allparams) {
+        if ($Force) { $ConfirmPreference = 'none' }
+
+        function Get-WrongCombo($optset, $allParams) {
             $x = 0
             foreach ($opt in $optset) {
-                if ($allparams.ContainsKey($opt)) { $x += 1 }
+                if ($allParams.ContainsKey($opt)) { $x += 1 }
             }
             if ($x -gt 1) {
                 $msg = $optset -Join ',-'
@@ -158,9 +159,9 @@ function Set-DbaDbState {
             }
         }
 
-        function Edit-DatabaseState($sqlinstance, $dbname, $opt, $immediate = $false) {
+        function Edit-DatabaseState($SqlInstance, $dbName, $opt, $immediate = $false) {
             $warn = $null
-            $sql = "ALTER DATABASE [$dbname] SET $opt"
+            $sql = "ALTER DATABASE [$dbName] SET $opt"
             if ($immediate) {
                 $sql += " WITH ROLLBACK IMMEDIATE"
             } else {
@@ -172,17 +173,17 @@ function Set-DbaDbState {
                     # this can be helpful only for SINGLE_USER databases
                     # but since $immediate is called, it does no more harm
                     # than the immediate rollback
-                    $sqlinstance.KillAllProcesses($dbname)
+                    $SqlInstance.KillAllProcesses($dbName)
                 }
-                $null = $sqlinstance.Query($sql)
+                $null = $SqlInstance.Query($sql)
             } catch {
-                $warn = "Failed to set '$dbname' to $opt"
+                $warn = "Failed to set '$dbName' to $opt"
                 Write-Message -Level Warning -Message $warn
             }
             return $warn
         }
 
-        $StatusHash = @{
+        $statusHash = @{
             'Offline'       = 'OFFLINE'
             'Normal'        = 'ONLINE'
             'EmergencyMode' = 'EMERGENCY'
@@ -190,9 +191,9 @@ function Set-DbaDbState {
 
         function Get-DbState($databaseName, $dbStatuses) {
             $base = $dbStatuses | Where-Object DatabaseName -ceq $databaseName
-            foreach ($status in $StatusHash.Keys) {
+            foreach ($status in $statusHash.Keys) {
                 if ($base.Status -match $status) {
-                    $base.Status = $StatusHash[$status]
+                    $base.Status = $statusHash[$status]
                     break
                 }
             }
@@ -200,23 +201,23 @@ function Set-DbaDbState {
         }
 
         $RWExclusive = @('ReadOnly', 'ReadWrite')
-        $StatusExclusive = @('Online', 'Offline', 'Emergency', 'Detached')
-        $AccessExclusive = @('SingleUser', 'RestrictedUser', 'MultiUser')
-        $allparams = $PSBoundParameters
+        $statusExclusive = @('Online', 'Offline', 'Emergency', 'Detached')
+        $accessExclusive = @('SingleUser', 'RestrictedUser', 'MultiUser')
+        $allParams = $PSBoundParameters
         try {
-            Get-WrongCombo -optset $RWExclusive -allparams $allparams
+            Get-WrongCombo -optset $RWExclusive -allparams $allParams
         } catch {
             Stop-Function -Message $_
             return
         }
         try {
-            Get-WrongCombo -optset $StatusExclusive -allparams $allparams
+            Get-WrongCombo -optset $statusExclusive -allparams $allParams
         } catch {
             Stop-Function -Message $_
             return
         }
         try {
-            Get-WrongCombo -optset $AccessExclusive -allparams $allparams
+            Get-WrongCombo -optset $accessExclusive -allparams $allParams
         } catch {
             Stop-Function -Message $_
             return
@@ -243,7 +244,7 @@ function Set-DbaDbState {
                 try {
                     $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential
                 } catch {
-                    Stop-Function -Message "Failure" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
+                    Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
                 }
                 $all_dbs = $server.Databases
                 $dbs += $all_dbs | Where-Object { @('master', 'model', 'msdb', 'tempdb', 'distribution') -notcontains $_.Name }
@@ -263,7 +264,7 @@ function Set-DbaDbState {
                 Write-Message -Level Warning -Message "Database $db is a system one, skipping"
                 Continue
             }
-            $dbStatuses = @{}
+            $dbStatuses = @{ }
             $server = $db.Parent
             if ($server -notin $dbStatuses.Keys) {
                 $dbStatuses[$server] = Get-DbaDbState -SqlInstance $server
@@ -458,7 +459,7 @@ function Set-DbaDbState {
 
             }
             if ($warn) {
-                $warn = $warn | Get-Unique
+                $warn = $warn | Where-Object { $_ } | Get-Unique
                 $warn = $warn -Join ';'
             } else {
                 $warn = $null
@@ -498,8 +499,5 @@ function Set-DbaDbState {
             }
         }
 
-    }
-    end {
-        Test-DbaDeprecation -DeprecatedOn "1.0.0" -EnableException:$false -Alias Set-DbaDatabaseState
     }
 }
